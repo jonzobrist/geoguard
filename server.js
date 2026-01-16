@@ -1,5 +1,22 @@
 
-import { defineConfig, loadEnv } from 'vite';
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+
+const PORT = process.env.PORT || 3000;
+
+// MIME types for static file serving
+const MIME_TYPES = {
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+};
 
 const generateSubstantialCidrs = (code, count = 40) => {
   const cidrs = [];
@@ -24,9 +41,9 @@ const generateSubstantialIpv6 = (code, count = 30) => {
   return Array.from(new Set(prefixes));
 };
 
-const buildRawScript = (countryCodes, type, action, useIpSet = true, useIpv6 = false) => {
+const generateScriptBody = (countryCodes, type, action, useIpSet = true, useIpv6 = false) => {
   const timestamp = new Date().toISOString();
-  const targetAction = (action === 'BLOCK' || action === 'DROP') ? "DROP" : "ACCEPT";
+  const targetAction = action === 'DROP' || action === 'BLOCK' ? "DROP" : "ACCEPT";
   const firewall = type || 'iptables';
   const codes = Array.isArray(countryCodes) ? countryCodes.map(c => c.toUpperCase()) : [(countryCodes || 'CN').toUpperCase()];
   
@@ -38,7 +55,7 @@ const buildRawScript = (countryCodes, type, action, useIpSet = true, useIpv6 = f
 
   const cmd = firewall === 'nftables' ? 'nft' : 'iptables';
   body += `if ! command -v ${cmd} &> /dev/null; then echo "Error: ${cmd} not found."; exit 1; fi\n`;
-  
+
   if (firewall === 'iptables') {
     if (useIpv6) {
       body += `if ! command -v ip6tables &> /dev/null; then echo "Warning: ip6tables not found. IPv6 rules will be skipped."; fi\n`;
@@ -131,46 +148,68 @@ const buildRawScript = (countryCodes, type, action, useIpSet = true, useIpv6 = f
   return body;
 };
 
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, '.', '');
-  
-  return {
-    define: {
-      'process.env.API_KEY': JSON.stringify(env.API_KEY || ""),
-    },
-    plugins: [
-      {
-        name: 'geoguard-api',
-        configureServer(server) {
-          server.middlewares.use(async (req, res, next) => {
-            if (req.url === '/v1/generate' && req.method === 'POST') {
-              let body = '';
-              req.on('data', chunk => { body += chunk; });
-              req.on('end', () => {
-                try {
-                  const data = JSON.parse(body || '{}');
-                  const script = buildRawScript(data.country, data.type, data.action, data.use_ipset !== false, data.use_ipv6 === true);
-                  
-                  res.statusCode = 200;
-                  res.setHeader('Content-Type', 'text/plain');
-                  res.setHeader('Access-Control-Allow-Origin', '*');
-                  res.end(script);
-                } catch (e) {
-                  res.statusCode = 400;
-                  res.end('Invalid JSON');
-                }
-              });
-              return;
-            }
-            next();
-          });
-        },
-      },
-    ],
-    server: {
-      host: '0.0.0.0',
-      port: 5173,
-      allowedHosts: ['geoguard.zlyxy.me'],
-    },
-  };
+const server = http.createServer((req, res) => {
+  // CORS Headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  // API Endpoint
+  if (req.url === '/v1/generate' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body || '{}');
+        const script = generateScriptBody(data.country, data.type, data.action, data.use_ipset !== false, data.use_ipv6 === true);
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end(script);
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: "Invalid JSON payload" }));
+      }
+    });
+    return;
+  }
+
+  // Static File Serving
+  let urlPath = req.url === '/' ? '/index.html' : req.url;
+  let filePath = path.join(__dirname, 'dist', urlPath);
+
+  // Simple path traversal protection
+  if (!filePath.startsWith(path.join(__dirname, 'dist'))) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
+
+  fs.stat(filePath, (err, stats) => {
+    if (err || !stats.isFile()) {
+      // Fallback to index.html for SPA routing if file not found
+      filePath = path.join(__dirname, 'dist', 'index.html');
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+    const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+
+    fs.readFile(filePath, (error, content) => {
+      if (error) {
+        res.writeHead(500);
+        res.end('Server Error');
+      } else {
+        res.writeHead(200, { 'Content-Type': contentType });
+        res.end(content, 'utf-8');
+      }
+    });
+  });
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`GeoGuard Unified Server listening on port ${PORT}`);
 });

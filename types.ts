@@ -22,7 +22,7 @@ export interface IPSet {
   id: string;
   name: string;
   mode: 'manual' | 'geo';
-  manualEntries: string[]; // CIDR ranges or single IPs
+  manualEntries: string[];
 }
 
 export interface GeneratorConfig {
@@ -31,6 +31,7 @@ export interface GeneratorConfig {
   firewallType: FirewallType;
   action: RuleAction;
   includeIpSet: boolean;
+  includeIpv6: boolean;
   customIpSets: IPSet[];
 }
 
@@ -38,6 +39,7 @@ export interface RuleSource {
   label: string;
   url: string;
   provider?: string;
+  type: 'local' | 'cdn' | 'ai';
 }
 
 export interface FirewallRule {
@@ -45,11 +47,11 @@ export interface FirewallRule {
   cidrs: string[];
   action: RuleAction;
   priority: number;
+  sourceType: 'local' | 'cdn' | 'ai';
 }
 
 export interface RuleOutput {
   script: string;
-  explanation: string;
   ruleset: FirewallRule[];
   ipSetCommands?: string[];
   dataSources?: RuleSource[];
