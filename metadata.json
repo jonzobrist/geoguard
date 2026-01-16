@@ -1,0 +1,7 @@
+{
+  "name": "GeoGuard Firewall Generator",
+  "description": "A professional tool to generate geo-location based firewall rules for iptables, nftables, eBPF, and more, using WHOIS data and geographic metadata.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
