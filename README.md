@@ -1,8 +1,8 @@
 <div align="center">
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
-# Screenshots
-![[images/geoguard-firewall-generator.png]]
+# Screenshot
+<img width="1200" height="475" alt="ScreenShot1" src="https://github.com/jonzobrist/geoguard/blob/d6ac47af7c86692b8be1bffcb01d6aaf2d0f488c/images/geoguard-firewall-generator.png" />
 
 
 Much thanks to ipverse on Github for the country-ip-blocks - https://github.com/ipverse/country-ip-blocks.git
